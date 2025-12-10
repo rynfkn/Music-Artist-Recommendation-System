@@ -7,3 +7,4 @@ scikit-learn
 lightgbm
 xgboost
 catboost
+jinja2

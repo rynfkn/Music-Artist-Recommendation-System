@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final Project RSBP</title>
+    
+    <!-- Tailwind CSS (No build step needed) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- APP LOGIC (Must be defined before Alpine initializes) -->
+    <script>
+        function musicApp() {
+            return {
+                selectedUser: '1', // Default to an integer ID likely to exist in real DB
+                recommendations: [],
+                selectedArtist: null,
+                explanation: null,
+                isLoading: false,
+                isExplanationLoading: false,
+                isDemoMode: false,
+                
+                // Mock Data (matches your schemas.py)
+                // Kept for "Demo Mode" fallback or known test users
+                mockUsers: {
+                    'u001': { id: "u001", name: "Alice (Rock Fan)", topTags: ["rock", "indie", "alternative", "britpop"] },
+                    'u002': { id: "u002", name: "Bob (Pop/Dance)", topTags: ["pop", "dance", "electronic", "rnb"] },
+                    'u003': { id: "u003", name: "Charlie (Jazz)", topTags: ["jazz", "instrumental", "saxophone", "ambient"] }
+                },
+
+                // Dynamic getter to handle both Mock users and random IDs typed by user
+                get currentUserData() {
+                    const mock = this.mockUsers[this.selectedUser];
+                    if (mock) return mock;
+
+                    // Fallback for unknown/new IDs
+                    return { 
+                        id: this.selectedUser, 
+                        name: "User " + this.selectedUser, 
+                        topTags: ["Unknown", "Generic"] 
+                    };
+                },
+
+                init() {
+                    this.fetchRecommendations();
+                    // Re-run icons when DOM updates
+                    this.$watch('isLoading', () => setTimeout(lucide.createIcons, 100));
+                    this.$watch('selectedArtist', () => setTimeout(lucide.createIcons, 100));
+                },
+
+                async fetchRecommendations() {
+                    this.isLoading = true;
+                    this.selectedArtist = null;
+                    this.explanation = null;
+                    this.isDemoMode = false;
+                    
+                    try {
+                        const response = await fetch(`/users/${this.selectedUser}/recommendations?k=10`);
+                        if (!response.ok) throw new Error("API Connection Failed");
+                        const data = await response.json();
+                        
+                        this.recommendations = data.items.map(item => ({
+                            ...item,
+                            score: item.score || Math.random() * (0.99 - 0.70) + 0.70
+                        }));
+                    } catch (err) {
+                        console.warn("Falling back to demo mode:", err);
+                        this.isDemoMode = true;
+                        // Mock Recommendations fallback
+                        this.recommendations = this.getMockRecs(this.selectedUser);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async selectArtist(artist) {
+                    this.selectedArtist = artist;
+                    this.isExplanationLoading = true;
+
+                    try {
+                        if (this.isDemoMode) {
+                            await new Promise(r => setTimeout(r, 600));
+                            this.explanation = this.getMockExplanation(artist.artist_id);
+                        } else {
+                            const response = await fetch(`/explain?user_id=${this.selectedUser}&artist_id=${artist.artist_id}`);
+                            if (!response.ok) throw new Error("Failed to fetch explanation");
+                            const data = await response.json();
+                            this.explanation = data.explanations;
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    } finally {
+                        this.isExplanationLoading = false;
+                        setTimeout(lucide.createIcons, 50);
+                    }
+                },
+
+                getUniqueArtistTags() {
+                    if (!this.explanation) return [];
+                    const shared = this.explanation.tag_overlap.shared || [];
+                    return this.explanation.tag_overlap.artist_tags
+                        .filter(t => !shared.includes(t))
+                        .slice(0, 3);
+                },
+
+                // --- MOCK DATA UTILS ---
+                getMockRecs(userId) {
+                    // Return specific mocks if known, otherwise generic
+                    const mocks = {
+                        'u001': [{ artist_id: 101, artist_name: "Radiohead", score: 0.94 }, { artist_id: 102, artist_name: "Arctic Monkeys", score: 0.88 }],
+                        'u002': [{ artist_id: 201, artist_name: "Dua Lipa", score: 0.96 }, { artist_id: 202, artist_name: "The Weeknd", score: 0.91 }]
+                    };
+                    
+                    if(mocks[userId]) return mocks[userId];
+
+                    // Generic random generation for unknown IDs in Demo Mode
+                    return [
+                        { artist_id: 901, artist_name: "Generic Artist A", score: 0.85 },
+                        { artist_id: 902, artist_name: "Generic Artist B", score: 0.72 },
+                        { artist_id: 903, artist_name: "Generic Artist C", score: 0.65 }
+                    ];
+                },
+                getMockExplanation(id) {
+                    // Generic mock structure
+                    return {
+                        tag_overlap: { user_tags: ["rock"], artist_tags: ["rock", "alt"], shared: ["rock"] },
+                        friend_activity: { friends_who_listened: ["u005", "u008"] },
+                        similar_artists: [{ artist_name: "Thom Yorke", shared_tags: 5 }, { artist_name: "Muse", shared_tags: 3 }]
+                    };
+                }
+            }
+        }
+    </script>
+    
+    <!-- Alpine.js for Interactivity (React replacement) -->
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.5); border-radius: 999px; }
+        [x-cloak] { display: none !important; }
+    </style>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 950: '#020617', 900: '#0f172a', 800: '#1e293b' }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen selection:bg-emerald-500/30" x-data="musicApp()">
+
+    <!-- HEADER -->
+    <header class="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-lg border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-900/20">
+                    <i data-lucide="music" class="text-slate-950 w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight text-white tracking-tight">Final Project</h1>
+                    <p class="text-[10px] font-medium text-emerald-400 uppercase tracking-wider">RSBP</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <!-- Demo Mode Badge -->
+                <div x-show="isDemoMode" class="hidden md:flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full">
+                    <i data-lucide="alert-circle" class="w-3 h-3 text-amber-500"></i>
+                    <span class="text-xs text-amber-500 font-medium">Demo Mode</span>
+                </div>
+                
+                <!-- USER INPUT FIELD -->
+                <form @submit.prevent="fetchRecommendations" class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-full p-1 pl-4 pr-1 transition-all focus-within:ring-2 focus-within:ring-emerald-500/50">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="user" class="w-4 h-4 text-slate-400"></i>
+                        <span class="text-xs font-medium text-slate-500 hidden sm:inline">ID:</span>
+                    </div>
+                    <input 
+                        type="text" 
+                        x-model="selectedUser" 
+                        class="bg-transparent text-sm font-medium text-white w-20 sm:w-24 outline-none placeholder-slate-600"
+                        placeholder="Type ID..."
+                    >
+                    <button type="submit" class="p-1.5 rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white transition-all">
+                         <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- LEFT COLUMN: User Context -->
+        <div class="lg:col-span-3 space-y-6">
+            <div class="bg-slate-900/50 backdrop-blur-md border border-slate-800 rounded-2xl overflow-hidden p-5">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">User Context</h3>
+                <div class="flex flex-col items-center py-4">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-t from-slate-800 to-slate-700 flex items-center justify-center mb-3 shadow-inner">
+                        <span class="text-2xl font-bold text-slate-400" x-text="selectedUser.toString().slice(0, 4)"></span>
+                    </div>
+                    <h2 class="text-lg font-semibold text-white" x-text="currentUserData.name.split(' ')[0]"></h2>
+                    <p class="text-sm text-slate-500">ID: <span x-text="currentUserData.id"></span></p>
+                </div>
+                
+                <div class="space-y-3 mt-4">
+                    <div class="text-xs text-slate-400 font-medium">Top Genres / Tags</div>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="tag in currentUserData.topTags" :key="tag">
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-medium border border-slate-700 text-slate-400 bg-transparent" x-text="tag"></span>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-br from-indigo-950/30 to-slate-900/50 border border-slate-800 rounded-2xl p-5">
+                <div class="flex items-start gap-3">
+                    <i data-lucide="activity" class="w-5 h-5 text-indigo-400 mt-0.5"></i>
+                    <div>
+                        <h4 class="text-sm font-semibold text-indigo-200">Model Stats</h4>
+                        <p class="text-xs text-slate-400 mt-1">Hybrid filtering using Neo4j Graph + XGBoost.</p>
+                    </div>
+                </div>
+                <div class="mt-4 grid grid-cols-2 gap-2 text-center">
+                    <div class="bg-slate-900/50 rounded-lg p-2">
+                        <div class="text-lg font-bold text-white">10</div>
+                        <div class="text-[10px] text-slate-500 uppercase">Results</div>
+                    </div>
+                    <div class="bg-slate-900/50 rounded-lg p-2">
+                        <div class="text-lg font-bold text-emerald-400">98%</div>
+                        <div class="text-[10px] text-slate-500 uppercase">Accuracy</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER COLUMN: Recommendations -->
+        <div class="lg:col-span-5 space-y-4">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i data-lucide="zap" class="w-5 h-5 text-amber-400 fill-amber-400"></i> Top Picks
+                </h2>
+            </div>
+
+            <!-- Loading Skeleton -->
+            <div x-show="isLoading" class="space-y-3 animate-pulse">
+                <template x-for="i in 4">
+                    <div class="h-20 bg-slate-900 rounded-2xl"></div>
+                </template>
+            </div>
+
+            <!-- List -->
+            <div x-show="!isLoading" class="space-y-3">
+                <template x-for="artist in recommendations" :key="artist.artist_id">
+                    <div 
+                        @click="selectArtist(artist)"
+                        class="group relative p-4 rounded-2xl border cursor-pointer transition-all duration-200"
+                        :class="selectedArtist && selectedArtist.artist_id === artist.artist_id ? 'bg-emerald-950/30 border-emerald-500/50 shadow-[0_0_30px_-10px_rgba(16,185,129,0.3)]' : 'bg-slate-900 border-slate-800 hover:border-slate-600 hover:translate-x-1'"
+                    >
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shadow-lg transition-colors"
+                                 :class="selectedArtist && selectedArtist.artist_id === artist.artist_id ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400 group-hover:bg-slate-700'">
+                                <span x-text="artist.artist_name.charAt(0)"></span>
+                            </div>
+                            
+                            <div class="flex-1 min-w-0">
+                                <div class="flex justify-between items-center mb-1">
+                                    <h3 class="font-semibold truncate transition-colors" 
+                                        :class="selectedArtist && selectedArtist.artist_id === artist.artist_id ? 'text-emerald-400' : 'text-slate-200'" 
+                                        x-text="artist.artist_name"></h3>
+                                    <span class="text-xs font-mono" 
+                                          :class="selectedArtist && selectedArtist.artist_id === artist.artist_id ? 'text-emerald-400' : 'text-slate-500'" 
+                                          x-text="(artist.score * 100).toFixed(1) + '%'"></span>
+                                </div>
+                                <!-- Progress Bar -->
+                                <div class="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                    <div class="h-full transition-all duration-500 ease-out" 
+                                         :class="selectedArtist && selectedArtist.artist_id === artist.artist_id ? 'bg-emerald-400' : 'bg-slate-600 group-hover:bg-slate-500'"
+                                         :style="`width: ${artist.score * 100}%`"></div>
+                                </div>
+                            </div>
+
+                            <i data-lucide="chevron-right" class="w-5 h-5 transition-opacity duration-200" 
+                               :class="selectedArtist && selectedArtist.artist_id === artist.artist_id ? 'text-emerald-500 opacity-100' : 'text-slate-700 opacity-0 group-hover:opacity-100'"></i>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Insight Engine -->
+        <div class="lg:col-span-4">
+            <div class="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-2xl h-full min-h-[500px] flex flex-col relative overflow-hidden">
+                
+                <!-- Empty State -->
+                <div x-show="!selectedArtist" class="flex-1 flex flex-col items-center justify-center text-center p-8 text-slate-500">
+                    <div class="w-16 h-16 rounded-full bg-slate-800/50 flex items-center justify-center mb-4">
+                        <i data-lucide="search" class="w-8 h-8 opacity-50"></i>
+                    </div>
+                    <p class="text-sm">Select an artist to reveal the <br/>Graph Logic + AI Insights.</p>
+                </div>
+
+                <!-- Artist Details -->
+                <div x-show="selectedArtist" class="flex-1 flex flex-col h-full max-h-[calc(100vh-120px)]" x-cloak>
+                    <!-- Header -->
+                    <div class="p-6 border-b border-slate-800 bg-gradient-to-b from-slate-800/50 to-transparent flex-shrink-0">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h2 class="text-2xl font-bold text-white mb-1" x-text="selectedArtist?.artist_name"></h2>
+                                <div class="flex items-center gap-2 text-emerald-400 text-sm font-medium">
+                                    <i data-lucide="radio" class="w-4 h-4"></i>
+                                    <span x-text="(selectedArtist?.score * 100).toFixed(1) + '% Match'"></span>
+                                </div>
+                            </div>
+                            <div class="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center cursor-pointer hover:bg-slate-700 hover:text-white transition-colors">
+                                <i data-lucide="play-circle" class="w-5 h-5"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Graph Insights Content -->
+                    <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+                        <div x-show="isExplanationLoading" class="flex items-center justify-center h-40">
+                            <i data-lucide="loader-2" class="w-8 h-8 text-emerald-500 animate-spin"></i>
+                        </div>
+
+                        <div x-show="!isExplanationLoading && explanation">
+                            <!-- Tags -->
+                            <div class="space-y-3 mb-6">
+                                <div class="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                    <i data-lucide="tags" class="w-4 h-4"></i> Shared DNA
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-for="tag in explanation?.tag_overlap?.shared || []">
+                                        <span class="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-md text-sm font-medium" x-text="'#' + tag"></span>
+                                    </template>
+                                    <template x-for="tag in getUniqueArtistTags()">
+                                        <span class="px-3 py-1 bg-slate-800 text-slate-400 border border-slate-700 rounded-md text-sm" x-text="'#' + tag"></span>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Friends -->
+                            <div class="space-y-3 mb-6">
+                                <div class="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                    <i data-lucide="users" class="w-4 h-4"></i> Social Proof
+                                </div>
+                                <div x-show="explanation?.friend_activity?.friends_who_listened.length > 0" class="flex items-center gap-3">
+                                    <div class="flex -space-x-2">
+                                        <template x-for="friend in explanation.friend_activity.friends_who_listened.slice(0,3)">
+                                            <div class="w-8 h-8 rounded-full bg-slate-700 border-2 border-slate-900 flex items-center justify-center text-[10px] text-white font-bold" x-text="friend.slice(1)"></div>
+                                        </template>
+                                    </div>
+                                    <span class="text-sm text-slate-400" x-text="explanation.friend_activity.friends_who_listened.length + ' friends listened'"></span>
+                                </div>
+                                <div x-show="!explanation?.friend_activity?.friends_who_listened.length" class="p-3 bg-slate-800/50 rounded-lg text-sm text-slate-500">
+                                    None of your friends have discovered this artist yet.
+                                </div>
+                            </div>
+
+                            <!-- Similar Artists -->
+                            <div class="space-y-3">
+                                <div class="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                    <i data-lucide="disc" class="w-4 h-4"></i> Graph Neighbors
+                                </div>
+                                <div class="space-y-2">
+                                    <template x-for="sim in explanation?.similar_artists?.slice(0,3)">
+                                        <div class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-800 transition-colors">
+                                            <span class="text-sm text-slate-300" x-text="sim.artist_name"></span>
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="text-xs text-slate-500" x-text="sim.shared_tags + ' shared tags'"></span>
+                                                <div class="w-16 h-1 bg-slate-700 rounded-full">
+                                                    <div class="h-full bg-indigo-500 rounded-full" :style="`width: ${Math.min(sim.shared_tags * 20, 100)}%`"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

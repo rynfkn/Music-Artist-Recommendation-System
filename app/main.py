@@ -1,5 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from .recommender import RecommenderService
 from .schemas import RecommendationResponse, ArtistRecommendation
 from .config import DEFAULT_TOP_K
@@ -9,6 +11,12 @@ app = FastAPI(
     title="Music Artist Recommendation API",
     version="1.0.0"
 )
+
+templates = Jinja2Templates(directory="app/templates")
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 origins = [
     "http://localhost:8000",
