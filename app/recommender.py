@@ -1,7 +1,7 @@
 import numpy as np
 from neo4j import GraphDatabase
 import joblib
-from .config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, MODEL_PATH, DEFAULT_TOP_K
+from .config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, NEO4J_DATABASE, MODEL_PATH, DEFAULT_TOP_K
 
 class RecommenderService:
     def __init__(self):
@@ -32,7 +32,7 @@ class RecommenderService:
         """
 
         artist_embs = {}
-        with self.driver.session() as session:
+        with self.driver.session(database=NEO4J_DATABASE) as session:
             result = session.run(query)
             for record in result:
                 artist_id = record["artist_id"]
@@ -51,7 +51,7 @@ class RecommenderService:
         WHERE u.embedding IS NOT NULL
         RETURN u.embedding AS emb
         """
-        with self.driver.session() as session:
+        with self.driver.session(database=NEO4J_DATABASE) as session:
             result = session.run(query, user_id=user_id)
             record = result.single()
 
@@ -70,7 +70,7 @@ class RecommenderService:
         MATCH (u:User {userID: $user_id})-[:LISTENED]->(a:Artist)
         RETURN a.id AS artist_id
         """
-        with self.driver.session() as session:
+        with self.driver.session(database=NEO4J_DATABASE) as session:
             result = session.run(query, user_id=user_id)
             return {r["artist_id"] for r in result}
 
@@ -178,5 +178,5 @@ class RecommenderService:
                     # "artist_url": r["url"],
                     # "score": float(r["listen_score"])  # di fallback ini skor = popularitas
                 })
-        
+
         return recs

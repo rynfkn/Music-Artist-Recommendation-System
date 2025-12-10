@@ -74,11 +74,11 @@ def get_recommendations(user_id: int, k: int = DEFAULT_TOP_K):
 def explain_recommendation(user_id: int, artist_id: int):
     global recommender_service
     driver = recommender_service.driver
-    
+
     user_tags = get_user_top_tags(driver, user_id)
     artist_tags = get_artist_tags(driver, artist_id)
     shared_tags = list(set(t for t,_ in user_tags) & set(artist_tags))
-    
+
     friends = get_friends_who_listened(driver, user_id, artist_id)
 
     similar_artists = get_similar_artists_by_tag(driver, user_id, artist_id)
