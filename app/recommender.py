@@ -86,7 +86,7 @@ class RecommenderService:
         MATCH (a:Artist {id: aid})
         RETURN a.id AS artist_id, a.name AS name, a.url AS url
         """
-        with self.driver.session() as session:
+        with self.driver.session(database=NEO4J_DATABASE) as session:
             result = session.run(query, ids=list(artist_ids))
             meta = {}
             for r in result:
@@ -168,7 +168,7 @@ class RecommenderService:
         ORDER BY listen_score DESC
         LIMIT $top_k
         """
-        with self.driver.session() as session:
+        with self.driver.session(database=NEO4J_DATABASE) as session:
             result = session.run(query, top_k=top_k)
             recs = []
             for r in result:
