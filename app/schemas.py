@@ -5,7 +5,8 @@ class ArtistRecommendation(BaseModel):
     artist_id: int
     artist_name: Optional[str]
     # artist_url: Optional[str]
-    # score: float
+    score: Optional[float]
+    tag_count: Optional[int]
 
 class RecommendationResponse(BaseModel):
     user_id: int

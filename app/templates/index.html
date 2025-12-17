@@ -163,7 +163,8 @@
 
                         this.recommendations = data.items.map(item => ({
                             ...item,
-                            score: item.score || Math.random() * (0.99 - 0.70) + 0.70
+                            score: item.score ?? 0,
+                            tag_count: item.tag_count ?? 0
                         }));
                     } catch (err) {
                         console.warn("Falling back to demo mode:", err);
@@ -208,13 +209,19 @@
 
                 getMockRecs(userId) {
                     const mocks = {
-                        'u001': [{ artist_id: 101, artist_name: "Radiohead", score: 0.94 }, { artist_id: 102, artist_name: "Arctic Monkeys", score: 0.88 }],
-                        'u002': [{ artist_id: 201, artist_name: "Dua Lipa", score: 0.96 }, { artist_id: 202, artist_name: "The Weeknd", score: 0.91 }]
+                        'u001': [
+                            { artist_id: 101, artist_name: "Radiohead", score: 0.94, tag_count: 18 },
+                            { artist_id: 102, artist_name: "Arctic Monkeys", score: 0.88, tag_count: 12 }
+                        ],
+                        'u002': [
+                            { artist_id: 201, artist_name: "Dua Lipa", score: 0.96, tag_count: 14 },
+                            { artist_id: 202, artist_name: "The Weeknd", score: 0.91, tag_count: 9 }
+                        ]
                     };
                     if(mocks[userId]) return mocks[userId];
                     return [
-                        { artist_id: 901, artist_name: "Generic Artist A", score: 0.85 },
-                        { artist_id: 902, artist_name: "Generic Artist B", score: 0.72 }
+                        { artist_id: 901, artist_name: "Generic Artist A", score: 0.85, tag_count: 5 },
+                        { artist_id: 902, artist_name: "Generic Artist B", score: 0.72, tag_count: 3 }
                     ];
                 },
                 getMockExplanation(id) {
@@ -373,7 +380,11 @@
                                         x-text="artist.artist_name"></h3>
                                     <!-- Score Percentage Removed from List -->
                                 </div>
-                                <!-- Progress Bar Removed from List -->
+                                <div class="flex items-center gap-2 text-xs text-slate-500">
+                                    <span x-text="Math.round((artist.score || 0) * 100) + '% match'"></span>
+                                    <span>•</span>
+                                    <span x-text="(artist.tag_count || 0) + ' tags'"></span>
+                                </div>
                             </div>
 
                             <i data-lucide="chevron-right" class="w-5 h-5 transition-opacity duration-200"
