@@ -84,7 +84,8 @@ class RecommenderService:
         query = """
         UNWIND $ids AS aid
         MATCH (a:Artist {id: aid})
-        RETURN a.id AS artist_id, a.name AS name, a.url AS url
+        OPTIONAL MATCH (a)-[:HAS_TAG]->(t:Tag)
+        RETURN a.id AS artist_id, a.name AS name, count(t) AS tag_count
         """
         with self.driver.session(database=NEO4J_DATABASE) as session:
             result = session.run(query, ids=list(artist_ids))
@@ -92,6 +93,7 @@ class RecommenderService:
             for r in result:
                 meta[r["artist_id"]] = {
                     "name": r["name"],
+                    "tag_count": int(r["tag_count"] or 0),
                     # "url": r["url"]
                 }
         return meta
@@ -152,8 +154,17 @@ class RecommenderService:
                 "artist_id": aid,
                 "artist_name": m.get("name"),
                 # "artist_url": m.get("url"),
-                # "score": score
+                "score": score,
+                "tag_count": m.get("tag_count", 0)
             })
+
+        recommendations.sort(
+            key=lambda item: (
+                item.get("tag_count", 0),
+                item.get("score", 0.0)
+            ),
+            reverse=True
+        )
 
         return recommendations
 
